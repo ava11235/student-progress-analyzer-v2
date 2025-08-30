@@ -9,6 +9,19 @@ interface ReportGeneratorProps {
 const ReportGenerator: React.FC<ReportGeneratorProps> = ({ analysisResult }) => {
   const [showSlackScript, setShowSlackScript] = useState(false);
 
+  // Function to create course abbreviations (same as Dashboard)
+  const createAbbreviation = (courseName: string): string => {
+    // Remove common words and take first letters of remaining words
+    const words = courseName
+      .replace(/\b(and|or|the|of|in|on|at|to|for|with|by)\b/gi, '') // Remove common words
+      .split(/[\s\-_]+/) // Split on spaces, hyphens, underscores
+      .filter(word => word.length > 0)
+      .map(word => word.charAt(0).toUpperCase());
+    
+    // Take first 3-4 letters for abbreviation
+    return words.slice(0, Math.min(4, words.length)).join('');
+  };
+
   const generateAtRiskAndNotStartedReport = () => {
     const workbook = XLSX.utils.book_new();
     
@@ -117,30 +130,27 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ analysisResult }) => 
     
     // Track used sheet names to ensure uniqueness
     const usedSheetNames = new Set(['Summary', 'Course Summary', 'All Learners Need Attention']);
-    let courseIndex = 1;
     
     courseGroups.forEach((learners, courseName) => {
       const courseSheet = XLSX.utils.json_to_sheet(learners);
       
-      // Create unique sheet name
-      let baseSheetName = courseName.replace(/[\\\/\?\*\[\]:]/g, '').substring(0, 12);
-      let sheetName = `${baseSheetName} - Action`;
+      // Create sheet name using course abbreviation
+      let sheetName = createAbbreviation(courseName);
       
-      // Ensure uniqueness by adding number if needed
+      // Ensure uniqueness and Excel sheet name limits (31 chars max)
       let finalSheetName = sheetName;
       let counter = 1;
-      while (usedSheetNames.has(finalSheetName) || finalSheetName.length > 31) {
-        finalSheetName = `${baseSheetName.substring(0, 9)} ${counter} - Action`;
+      while (usedSheetNames.has(finalSheetName)) {
+        finalSheetName = `${sheetName}${counter}`;
         counter++;
+        // If still too long, truncate
         if (finalSheetName.length > 31) {
-          finalSheetName = `Course ${courseIndex} - Action`;
-          break;
+          finalSheetName = `${sheetName.substring(0, 29)}${counter}`;
         }
       }
       
       usedSheetNames.add(finalSheetName);
       XLSX.utils.book_append_sheet(workbook, courseSheet, finalSheetName);
-      courseIndex++;
     });
     
     // Generate and download file
@@ -183,12 +193,6 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ analysisResult }) => 
         scripts += `Let me know what works best for you!\n\n`;
         scripts += `Best regards,\n[YOUR_NAME]\n`;
         scripts += `\`\`\`\n\n`;
-        
-        scripts += `**Individual Learners:**\n`;
-        highRisk.forEach(learner => {
-          scripts += `- **${learner.email}**: ${learner.weekPercentage}% progress, Week ${learner.currentWeek}\n`;
-        });
-        scripts += `\n`;
       }
       
       if (mediumRisk.length > 0) {
@@ -200,12 +204,6 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ analysisResult }) => 
         scripts += `Would a quick chat be helpful? I'm here to support your success!\n\n`;
         scripts += `Best,\n[YOUR_NAME]\n`;
         scripts += `\`\`\`\n\n`;
-        
-        scripts += `**Individual Learners:**\n`;
-        mediumRisk.forEach(learner => {
-          scripts += `- **${learner.email}**: ${learner.weekPercentage}% progress, Week ${learner.currentWeek}\n`;
-        });
-        scripts += `\n`;
       }
       
       scripts += `---\n\n`;
