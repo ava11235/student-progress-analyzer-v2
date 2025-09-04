@@ -25,23 +25,25 @@ export const analyzeLearnerData = async (data: LearnerData[], currentWeek: numbe
     return !isReadyToAdvance;
   });
 
-  // Calculate at-risk learners: Based purely on being 3+ weeks behind current week
+  // Calculate at-risk learners: Focus on "saveable" learners 1-3 weeks behind current week
   const atRiskLearners: AtRiskLearner[] = data
     .filter(learner => {
-      // Only criteria: Learners who are 3+ weeks behind the current week
+      // Target learners who are 1-3 weeks behind (can still be helped)
       const weeksBehind = currentAnalysisWeek - learner.currentWeek;
-      return weeksBehind >= 3;
+      return weeksBehind >= 1 && weeksBehind <= 3;
     })
     .map(learner => {
       const weeksBehind = Math.max(0, currentAnalysisWeek - learner.currentWeek);
       
-      // Determine risk level based on weeks behind current week only
+      // Determine risk level for actionable intervention
       let riskLevel: 'High' | 'Medium' | 'Low' = 'Low';
       
-      if (weeksBehind >= 6) {
-        riskLevel = 'High';
-      } else if (weeksBehind >= 3) {
-        riskLevel = 'Medium';
+      if (weeksBehind === 3) {
+        riskLevel = 'High';      // 3 weeks behind - urgent intervention needed
+      } else if (weeksBehind === 2) {
+        riskLevel = 'Medium';    // 2 weeks behind - moderate intervention
+      } else if (weeksBehind === 1) {
+        riskLevel = 'Low';       // 1 week behind - gentle nudge needed
       }
       
       return {

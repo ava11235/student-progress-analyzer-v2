@@ -3,18 +3,20 @@ import { Authenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
 import Dashboard from './components/Dashboard';
 import FileUpload from './components/FileUpload';
-import { LearnerData, AnalysisResult } from './types';
+import AIInsights from './components/AIInsights';
+import { LearnerData, AnalysisResult, LearnerDirectory } from './types';
 import { analyzeLearnerData } from './utils/dataAnalysis';
 
 function App() {
   const [learnerData, setLearnerData] = useState<LearnerData[]>([]);
   const [originalData, setOriginalData] = useState<LearnerData[]>([]);
+  const [learnerDirectory, setLearnerDirectory] = useState<LearnerDirectory[]>([]);
   const [availableCourses, setAvailableCourses] = useState<string[]>([]);
   const [currentCourse, setCurrentCourse] = useState<string>('');
   const [currentWeek, setCurrentWeek] = useState<number>(1);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [allCoursesOverview, setAllCoursesOverview] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'upload' | 'dashboard' | 'methodology'>('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'dashboard' | 'ai-insights' | 'methodology'>('upload');
   const [isProcessing, setIsProcessing] = useState(false);
   
   // Temporary bypass for testing - set to false for production
@@ -51,11 +53,12 @@ function App() {
     return coursesOverview;
   };
 
-  const handleFileUpload = async (data: LearnerData[], week: number, selectedCourse?: string) => {
+  const handleFileUpload = async (data: LearnerData[], week: number, selectedCourse?: string, directory?: LearnerDirectory[]) => {
     setIsProcessing(true);
     try {
       // Store original data and extract available courses
       setOriginalData(data);
+      setLearnerDirectory(directory || []);
       const uniqueCourses = Array.from(new Set(data.map(item => item.courseName).filter(Boolean)));
       setAvailableCourses(uniqueCourses);
       setCurrentWeek(week);
@@ -130,6 +133,13 @@ function App() {
               Dashboard
             </button>
             <button 
+              className={`tab ${activeTab === 'ai-insights' ? 'active' : ''}`}
+              onClick={() => setActiveTab('ai-insights')}
+              disabled={!analysisResult}
+            >
+              🤖 AI Insights
+            </button>
+            <button 
               className={`tab ${activeTab === 'methodology' ? 'active' : ''}`}
               onClick={() => setActiveTab('methodology')}
             >
@@ -152,7 +162,20 @@ function App() {
               currentCourse={currentCourse}
               onCourseChange={handleCourseChange}
               allCoursesData={allCoursesOverview}
+              learnerDirectory={learnerDirectory}
             />
+          )}
+
+          {activeTab === 'ai-insights' && analysisResult && (
+            <div className="card">
+              <AIInsights 
+                analysisResult={analysisResult}
+                learnerDirectory={learnerDirectory}
+                availableCourses={availableCourses}
+                currentCourse={currentCourse}
+                allCoursesData={allCoursesOverview}
+              />
+            </div>
           )}
 
           {activeTab === 'methodology' && (
@@ -184,15 +207,15 @@ function App() {
                   </div>
                 </div>
 
-                <h3>🎯 At-Risk Identification Algorithm</h3>
+                <h3>🎯 Actionable Intervention Algorithm</h3>
                 <div style={{ backgroundColor: '#f8f9fa', padding: '20px', borderRadius: '8px', border: '1px solid #e9ecef', margin: '15px 0' }}>
-                  <h4 style={{ margin: '0 0 15px 0', color: '#495057' }}>Week-Based Analysis</h4>
+                  <h4 style={{ margin: '0 0 15px 0', color: '#495057' }}>Focus on "Saveable" Learners</h4>
                   <ol style={{ margin: '0', paddingLeft: '20px' }}>
                     <li><strong>Current Week Input:</strong> You specify the current program week (1-11)</li>
                     <li><strong>Learner Week Comparison:</strong> System compares each learner's current week to program week</li>
-                    <li><strong>Behind Schedule Calculation:</strong> If learner is 3+ weeks behind → flagged as "At Risk"</li>
-                    <li><strong>Risk Levels:</strong> Medium Risk (3-5 weeks behind), High Risk (6+ weeks behind)</li>
-                    <li><strong>Consistent Results:</strong> Based only on week numbers, not dependent on report date</li>
+                    <li><strong>Actionable Range:</strong> Targets learners 1-3 weeks behind (can still be helped)</li>
+                    <li><strong>Intervention Levels:</strong> Low (1 week behind), Medium (2 weeks), High (3 weeks)</li>
+                    <li><strong>Instructor Focus:</strong> Excludes learners too far behind to realistically catch up</li>
                   </ol>
                 </div>
 

@@ -11,6 +11,13 @@ export interface LearnerData {
   nextAction: string;
 }
 
+export interface LearnerDirectory {
+  email: string;
+  firstName: string;
+  lastName: string;
+  slackId: string;
+}
+
 export interface AtRiskLearner extends LearnerData {
   weeksBeind: number;
   riskLevel: 'High' | 'Medium' | 'Low';

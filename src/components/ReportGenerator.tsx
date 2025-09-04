@@ -1,13 +1,30 @@
 import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
-import { AnalysisResult } from '../types';
+import { AnalysisResult, LearnerDirectory } from '../types';
 
 interface ReportGeneratorProps {
   analysisResult: AnalysisResult;
+  learnerDirectory?: LearnerDirectory[];
 }
 
-const ReportGenerator: React.FC<ReportGeneratorProps> = ({ analysisResult }) => {
+const ReportGenerator: React.FC<ReportGeneratorProps> = ({ analysisResult, learnerDirectory = [] }) => {
   const [showSlackScript, setShowSlackScript] = useState(false);
+
+  // Helper function to get learner info from directory
+  const getLearnerInfo = (email: string) => {
+    const learner = learnerDirectory.find(l => l.email.toLowerCase() === email.toLowerCase());
+    return learner ? {
+      firstName: learner.firstName,
+      lastName: learner.lastName,
+      fullName: `${learner.firstName} ${learner.lastName}`.trim(),
+      slackId: learner.slackId
+    } : {
+      firstName: '',
+      lastName: '',
+      fullName: '',
+      slackId: ''
+    };
+  };
 
   // Function to create course abbreviations (same as Dashboard)
   const createAbbreviation = (courseName: string): string => {
@@ -32,10 +49,15 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ analysisResult }) => 
     // Create data for learners who need attention (at-risk or not started)
     const needsAttentionData: any[] = [];
     
-    // Add at-risk learners
+    // Add at-risk learners with directory information
     analysisResult.atRiskLearners.forEach(learner => {
+      const learnerInfo = getLearnerInfo(learner.email);
       needsAttentionData.push({
         'Email': learner.email,
+        'First Name': learnerInfo.firstName,
+        'Last Name': learnerInfo.lastName,
+        'Full Name': learnerInfo.fullName,
+        'Slack ID': learnerInfo.slackId,
         'Course Name': learner.courseName,
         'Status Category': 'At Risk',
         'Current Week': learner.currentWeek,
@@ -45,8 +67,10 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ analysisResult }) => 
         'Last Activity': learner.lastActivity,
         'Last Completed Module': learner.lastCompletedModule,
         'Next Action': learner.nextAction,
-        'Weeks Since Activity': learner.weeksBeind,
-        'Recommended Action': learner.riskLevel === 'High' ? 'Immediate call/meeting' : 'Check-in message'
+        'Weeks Behind': learner.weeksBeind,
+        'Recommended Action': learner.riskLevel === 'High' ? 'Urgent intervention (3 weeks behind)' : 
+                             learner.riskLevel === 'Medium' ? 'Schedule check-in (2 weeks behind)' : 
+                             'Gentle nudge (1 week behind)'
       });
     });
     
@@ -65,12 +89,22 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ analysisResult }) => 
     
     // Summary Sheet
     const totalNeedsAttention = courseSummary.reduce((sum, course) => sum + course['Needs Attention Total'], 0);
+    const learnersWithContactInfo = analysisResult.atRiskLearners.filter(l => {
+      const info = getLearnerInfo(l.email);
+      return info.firstName || info.slackId;
+    }).length;
+    
     const summaryData = [
       { 'Metric': 'Total Unique Learners', 'Value': analysisResult.totalLearners },
-      { 'Metric': 'Learners Needing Attention', 'Value': totalNeedsAttention },
-      { 'Metric': '- At Risk Learners', 'Value': atRiskEmails.size },
-      { 'Metric': '- Not Started Learners', 'Value': courseSummary.reduce((sum, course) => sum + course['Not Started'], 0) },
-      { 'Metric': 'Attention Needed Percentage', 'Value': `${Math.round((totalNeedsAttention / analysisResult.totalLearners) * 100)}%` },
+      { 'Metric': 'Actionable Learners (1-3 weeks behind)', 'Value': atRiskEmails.size },
+      { 'Metric': '- Urgent (3 weeks behind)', 'Value': analysisResult.atRiskLearners.filter(l => l.riskLevel === 'High').length },
+      { 'Metric': '- Check-in (2 weeks behind)', 'Value': analysisResult.atRiskLearners.filter(l => l.riskLevel === 'Medium').length },
+      { 'Metric': '- Nudge (1 week behind)', 'Value': analysisResult.atRiskLearners.filter(l => l.riskLevel === 'Low').length },
+      { 'Metric': 'Learner Directory Loaded', 'Value': learnerDirectory.length > 0 ? 'Yes' : 'No' },
+      { 'Metric': 'Directory Entries', 'Value': learnerDirectory.length },
+      { 'Metric': 'At-Risk Learners with Contact Info', 'Value': `${learnersWithContactInfo}/${atRiskEmails.size}` },
+      { 'Metric': 'Contact Info Coverage', 'Value': atRiskEmails.size > 0 ? `${Math.round((learnersWithContactInfo / atRiskEmails.size) * 100)}%` : '0%' },
+      { 'Metric': 'Intervention Success Rate Potential', 'Value': `${Math.round((atRiskEmails.size / analysisResult.totalLearners) * 100)}%` },
       { 'Metric': 'Total Courses', 'Value': analysisResult.courseStats.length },
       { 'Metric': 'Report Generated', 'Value': new Date().toLocaleDateString() }
     ];
@@ -94,16 +128,23 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ analysisResult }) => 
       if (!courseGroups.has(learner.courseName)) {
         courseGroups.set(learner.courseName, []);
       }
+      const learnerInfo = getLearnerInfo(learner.email);
       courseGroups.get(learner.courseName)!.push({
         'Email': learner.email,
+        'First Name': learnerInfo.firstName,
+        'Last Name': learnerInfo.lastName,
+        'Full Name': learnerInfo.fullName,
+        'Slack ID': learnerInfo.slackId,
         'Status Category': 'At Risk',
         'Current Week': learner.currentWeek,
         'Progress Percentage': `${learner.weekPercentage}%`,
         'Risk Level': learner.riskLevel,
         'Week Status': learner.weekStatus,
         'Last Activity': learner.lastActivity,
-        'Weeks Since Activity': learner.weeksBeind,
-        'Recommended Action': learner.riskLevel === 'High' ? 'Immediate call/meeting' : 'Check-in message'
+        'Weeks Behind': learner.weeksBeind,
+        'Recommended Action': learner.riskLevel === 'High' ? 'Urgent intervention (3 weeks behind)' : 
+                             learner.riskLevel === 'Medium' ? 'Schedule check-in (2 weeks behind)' : 
+                             'Gentle nudge (1 week behind)'
       });
     });
     
@@ -161,50 +202,166 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ analysisResult }) => 
 
 
   const generateSlackScriptsByCourse = () => {
-    // Group at-risk learners by course
-    const learnersByCourse = new Map<string, typeof analysisResult.atRiskLearners>();
+    // Group at-risk learners by course with directory info
+    const learnersByCourse = new Map<string, Array<typeof analysisResult.atRiskLearners[0] & {learnerInfo: ReturnType<typeof getLearnerInfo>}>>();
     
     analysisResult.atRiskLearners.forEach(learner => {
       if (!learnersByCourse.has(learner.courseName)) {
         learnersByCourse.set(learner.courseName, []);
       }
-      learnersByCourse.get(learner.courseName)!.push(learner);
+      const learnerInfo = getLearnerInfo(learner.email);
+      learnersByCourse.get(learner.courseName)!.push({
+        ...learner,
+        learnerInfo
+      });
     });
 
     let scripts = `# Slack Outreach Scripts by Course\n\n`;
+    scripts += `**Directory Status:** ${learnerDirectory.length > 0 ? `✅ ${learnerDirectory.length} learners with contact info` : '❌ No learner directory uploaded'}\n\n`;
     
     learnersByCourse.forEach((learners, courseName) => {
       const highRisk = learners.filter(l => l.riskLevel === 'High');
       const mediumRisk = learners.filter(l => l.riskLevel === 'Medium');
+      const lowRisk = learners.filter(l => l.riskLevel === 'Low');
       
       scripts += `## ${courseName}\n`;
-      scripts += `**Total At-Risk Learners:** ${learners.length} (${highRisk.length} High Risk, ${mediumRisk.length} Medium Risk)\n\n`;
+      scripts += `**Actionable Learners:** ${learners.length} (${highRisk.length} Urgent, ${mediumRisk.length} Check-in, ${lowRisk.length} Nudge)\n\n`;
       
       if (highRisk.length > 0) {
-        scripts += `### High Risk Learners - Immediate Action Required\n`;
+        scripts += `### 🚨 3 Weeks Behind - Urgent Intervention Required (${highRisk.length} learners)\n`;
+        
+        // List specific learners with their contact info
+        highRisk.forEach(learner => {
+          const name = learner.learnerInfo.fullName || learner.email;
+          const slackMention = learner.learnerInfo.slackId ? `<@${learner.learnerInfo.slackId}>` : name;
+          scripts += `**${name}** (${learner.email})${learner.learnerInfo.slackId ? ` - Slack: ${slackMention}` : ''}\n`;
+        });
+        scripts += `\n`;
+        
         scripts += `**Template Message:**\n`;
         scripts += `\`\`\`\n`;
         scripts += `Hi [NAME],\n\n`;
-        scripts += `I noticed you haven't made progress in ${courseName} recently. I'd love to help you get back on track!\n\n`;
-        scripts += `Would you be available for a quick 15-minute call this week to discuss:\n`;
-        scripts += `• Any challenges you're facing\n`;
-        scripts += `• Your current schedule and availability\n`;
-        scripts += `• Resources that might help\n\n`;
-        scripts += `Let me know what works best for you!\n\n`;
+        scripts += `I see you're about 3 weeks behind in ${courseName}. The good news is you can still catch up! 🚀\n\n`;
+        scripts += `Let's schedule a 20-minute call this week to:\n`;
+        scripts += `• Create a catch-up plan that works for your schedule\n`;
+        scripts += `• Identify any blockers or challenges\n`;
+        scripts += `• Set up additional support resources\n\n`;
+        scripts += `You've got this - let's get you back on track!\n\n`;
         scripts += `Best regards,\n[YOUR_NAME]\n`;
         scripts += `\`\`\`\n\n`;
+        
+        // Individual personalized messages if directory is available
+        if (learnerDirectory.length > 0) {
+          scripts += `**Personalized Messages:**\n`;
+          highRisk.forEach(learner => {
+            const name = learner.learnerInfo.firstName || 'there';
+            const slackMention = learner.learnerInfo.slackId ? `<@${learner.learnerInfo.slackId}>` : learner.email;
+            scripts += `\n**For ${learner.learnerInfo.fullName || learner.email}:**\n`;
+            scripts += `\`\`\`\n`;
+            scripts += `Hi ${name},\n\n`;
+            scripts += `I see you're about 3 weeks behind in ${courseName}. The good news is you can still catch up! 🚀\n\n`;
+            scripts += `Let's schedule a 20-minute call this week to get you back on track.\n\n`;
+            scripts += `Best regards,\n[YOUR_NAME]\n`;
+            scripts += `\`\`\`\n`;
+            if (learner.learnerInfo.slackId) {
+              scripts += `**Slack mention:** ${slackMention}\n`;
+            }
+          });
+          scripts += `\n`;
+        }
       }
       
       if (mediumRisk.length > 0) {
-        scripts += `### Medium Risk Learners - Check-in Recommended\n`;
+        scripts += `### ⚠️ 2 Weeks Behind - Check-in Needed (${mediumRisk.length} learners)\n`;
+        
+        // List specific learners with their contact info
+        mediumRisk.forEach(learner => {
+          const name = learner.learnerInfo.fullName || learner.email;
+          const slackMention = learner.learnerInfo.slackId ? `<@${learner.learnerInfo.slackId}>` : name;
+          scripts += `**${name}** (${learner.email})${learner.learnerInfo.slackId ? ` - Slack: ${slackMention}` : ''}\n`;
+        });
+        scripts += `\n`;
+        
         scripts += `**Template Message:**\n`;
         scripts += `\`\`\`\n`;
         scripts += `Hi [NAME],\n\n`;
-        scripts += `Just checking in on your ${courseName} progress! I see you're making some progress but wanted to see if there's anything I can do to help you stay on track.\n\n`;
-        scripts += `Would a quick chat be helpful? I'm here to support your success!\n\n`;
-        scripts += `Best,\n[YOUR_NAME]\n`;
+        scripts += `Just checking in on your progress in ${courseName}. I noticed you're about 2 weeks behind the current schedule.\n\n`;
+        scripts += `How are things going? Any questions or challenges I can help with?\n\n`;
+        scripts += `If you'd like, we can set up a quick 15-minute check-in to:\n`;
+        scripts += `• Review your progress\n`;
+        scripts += `• Adjust your learning plan if needed\n`;
+        scripts += `• Make sure you have everything you need to succeed\n\n`;
+        scripts += `Let me know how I can support you!\n\n`;
+        scripts += `Best regards,\n[YOUR_NAME]\n`;
         scripts += `\`\`\`\n\n`;
+        
+        // Individual personalized messages if directory is available
+        if (learnerDirectory.length > 0) {
+          scripts += `**Personalized Messages:**\n`;
+          mediumRisk.forEach(learner => {
+            const name = learner.learnerInfo.firstName || 'there';
+            const slackMention = learner.learnerInfo.slackId ? `<@${learner.learnerInfo.slackId}>` : learner.email;
+            scripts += `\n**For ${learner.learnerInfo.fullName || learner.email}:**\n`;
+            scripts += `\`\`\`\n`;
+            scripts += `Hi ${name},\n\n`;
+            scripts += `Just checking in on your ${courseName} progress! How are things going?\n\n`;
+            scripts += `Let me know if you need any support!\n\n`;
+            scripts += `Best regards,\n[YOUR_NAME]\n`;
+            scripts += `\`\`\`\n`;
+            if (learner.learnerInfo.slackId) {
+              scripts += `**Slack mention:** ${slackMention}\n`;
+            }
+          });
+          scripts += `\n`;
+        }
       }
+      
+      if (lowRisk.length > 0) {
+        scripts += `### 💛 1 Week Behind - Gentle Nudge (${lowRisk.length} learners)\n`;
+        
+        // List specific learners with their contact info
+        lowRisk.forEach(learner => {
+          const name = learner.learnerInfo.fullName || learner.email;
+          const slackMention = learner.learnerInfo.slackId ? `<@${learner.learnerInfo.slackId}>` : name;
+          scripts += `**${name}** (${learner.email})${learner.learnerInfo.slackId ? ` - Slack: ${slackMention}` : ''}\n`;
+        });
+        scripts += `\n`;
+        
+        scripts += `**Template Message:**\n`;
+        scripts += `\`\`\`\n`;
+        scripts += `Hi [NAME],\n\n`;
+        scripts += `Hope you're doing well! I noticed you're about a week behind in ${courseName}.\n\n`;
+        scripts += `No worries - this is totally manageable! 💪\n\n`;
+        scripts += `Just wanted to check:\n`;
+        scripts += `• Are you finding the material challenging?\n`;
+        scripts += `• Do you need any clarification on recent topics?\n`;
+        scripts += `• Is your current pace working for your schedule?\n\n`;
+        scripts += `Feel free to reach out if you need any support. You're doing great!\n\n`;
+        scripts += `Best regards,\n[YOUR_NAME]\n`;
+        scripts += `\`\`\`\n\n`;
+        
+        // Individual personalized messages if directory is available
+        if (learnerDirectory.length > 0) {
+          scripts += `**Personalized Messages:**\n`;
+          lowRisk.forEach(learner => {
+            const name = learner.learnerInfo.firstName || 'there';
+            const slackMention = learner.learnerInfo.slackId ? `<@${learner.learnerInfo.slackId}>` : learner.email;
+            scripts += `\n**For ${learner.learnerInfo.fullName || learner.email}:**\n`;
+            scripts += `\`\`\`\n`;
+            scripts += `Hi ${name},\n\n`;
+            scripts += `Hope you're doing well! Just a gentle nudge on ${courseName} - you're only about a week behind, totally manageable! 💪\n\n`;
+            scripts += `Let me know if you need any support!\n\n`;
+            scripts += `Best regards,\n[YOUR_NAME]\n`;
+            scripts += `\`\`\`\n`;
+            if (learner.learnerInfo.slackId) {
+              scripts += `**Slack mention:** ${slackMention}\n`;
+            }
+          });
+          scripts += `\n`;
+        }
+      }
+      
+
       
       scripts += `---\n\n`;
     });
@@ -241,8 +398,26 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ analysisResult }) => 
     URL.revokeObjectURL(url);
   };
 
+  const hasDirectory = learnerDirectory.length > 0;
+  const learnersWithContactInfo = analysisResult.atRiskLearners.filter(l => {
+    const info = getLearnerInfo(l.email);
+    return info.firstName || info.slackId;
+  }).length;
+
   return (
     <div style={{ display: 'inline-block' }}>
+      <div style={{ 
+        fontSize: '12px', 
+        color: hasDirectory ? '#28a745' : '#6c757d', 
+        marginBottom: '8px',
+        textAlign: 'center'
+      }}>
+        {hasDirectory 
+          ? `✅ Directory: ${learnersWithContactInfo}/${analysisResult.atRiskLearners.length} with contact info`
+          : '📋 No learner directory uploaded'
+        }
+      </div>
+      
       <button 
         onClick={generateAtRiskAndNotStartedReport}
         style={{ 
@@ -256,15 +431,18 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({ analysisResult }) => 
           fontWeight: 'bold'
         }}
       >
-        ⚠️ Learners Needing Attention
+        🎯 Actionable Learners Report
       </button>
       
       <button 
         onClick={() => setShowSlackScript(!showSlackScript)}
         className="btn btn-primary"
-        style={{ marginRight: '10px' }}
+        style={{ 
+          marginRight: '10px',
+          backgroundColor: hasDirectory ? '#28a745' : '#007bff'
+        }}
       >
-        💬 View Slack Scripts
+        💬 {hasDirectory ? 'Personalized Scripts' : 'Template Scripts'}
       </button>
       
       {showSlackScript && (
