@@ -1,60 +1,53 @@
-import { LearnerData, AtRiskLearner, CourseStats, AnalysisResult } from '../types';
+import { LearnerData, AtRiskLearner, CourseStats, AnalysisResult, WeeklyProgress, NextActionStats, CourseWeekStats } from '../types';
 
-export const analyzeLearnerData = async (data: LearnerData[]): Promise<AnalysisResult> => {
+export const analyzeLearnerData = async (data: LearnerData[], currentWeek: number): Promise<AnalysisResult> => {
   // Get unique learners (deduplicate by email)
   const uniqueEmails = new Set(data.map(learner => learner.email));
   const uniqueLearnerCount = uniqueEmails.size;
   
-  // Helper function to calculate weeks since last activity
-  const getWeeksSinceLastActivity = (lastActivity: string): number => {
-    const currentDate = new Date();
-    
-    // Try to parse different date formats from the lastActivity string
-    // Common formats: "10-Jul-25", "July 10, 2025", "2025-07-10", etc.
-    let activityDate: Date | null = null;
-    
-    // Try parsing "10-Jul-25" format
-    const ddMmmYyMatch = lastActivity.match(/(\d{1,2})-([A-Za-z]{3})-(\d{2})/);
-    if (ddMmmYyMatch) {
-      const [, day, month, year] = ddMmmYyMatch;
-      const monthMap: { [key: string]: number } = {
-        'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5,
-        'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11
-      };
-      const fullYear = parseInt(year) + 2000; // Convert 25 to 2025
-      activityDate = new Date(fullYear, monthMap[month.toLowerCase()], parseInt(day));
-    }
-    
-    // If we couldn't parse the date, assume it's recent (0 weeks ago)
-    if (!activityDate || isNaN(activityDate.getTime())) {
-      return 0;
-    }
-    
-    // Calculate weeks difference
-    const timeDiff = currentDate.getTime() - activityDate.getTime();
-    const weeksDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24 * 7));
-    
-    return Math.max(0, weeksDiff);
-  };
+  // Use the provided current week for analysis
+  const currentAnalysisWeek = currentWeek;
+  
+  // Removed date-based activity calculation - using week-based only
 
-  // Calculate at-risk learners: In Progress learners with last activity 3+ weeks ago
+  // Identify off-track learners using Skill Builder methodology
+  // Step 1: Filter learners who are behind the current week
+  // Step 2: Exclude learners whose Next Action is "Move to Week X" (they're ready to advance)
+  const offTrackLearners = data.filter(learner => {
+    // Only include learners who are behind the current analysis week
+    const isBehindCurrentWeek = learner.currentWeek < currentAnalysisWeek;
+    if (!isBehindCurrentWeek) return false;
+    
+    // Exclude learners who are ready to move to the next week
+    const nextAction = learner.nextAction.toLowerCase();
+    const isReadyToAdvance = nextAction.includes('move to week') || nextAction.includes('move to next');
+    
+    return !isReadyToAdvance;
+  });
+
+  // Calculate at-risk learners: Based purely on being 3+ weeks behind current week
   const atRiskLearners: AtRiskLearner[] = data
     .filter(learner => {
-      // Only consider "In Progress" learners
-      const isInProgress = learner.weekStatus.toLowerCase().includes('progress');
-      if (!isInProgress) return false;
-      
-      // Check if last activity was 3+ weeks ago
-      const weeksSinceActivity = getWeeksSinceLastActivity(learner.lastActivity);
-      return weeksSinceActivity >= 3;
+      // Only criteria: Learners who are 3+ weeks behind the current week
+      const weeksBehind = currentAnalysisWeek - learner.currentWeek;
+      return weeksBehind >= 3;
     })
     .map(learner => {
-      const weeksSinceActivity = getWeeksSinceLastActivity(learner.lastActivity);
+      const weeksBehind = Math.max(0, currentAnalysisWeek - learner.currentWeek);
+      
+      // Determine risk level based on weeks behind current week only
+      let riskLevel: 'High' | 'Medium' | 'Low' = 'Low';
+      
+      if (weeksBehind >= 6) {
+        riskLevel = 'High';
+      } else if (weeksBehind >= 3) {
+        riskLevel = 'Medium';
+      }
       
       return {
         ...learner,
-        weeksBeind: weeksSinceActivity,
-        riskLevel: weeksSinceActivity >= 6 ? 'High' as const : 'Medium' as const
+        weeksBeind: weeksBehind,
+        riskLevel
       };
     })
     .sort((a, b) => b.weeksBeind - a.weeksBeind);
@@ -137,33 +130,37 @@ export const analyzeLearnerData = async (data: LearnerData[]): Promise<AnalysisR
 
 
   // Calculate status distribution using unique learners
-  const uniqueAtRiskEmails = new Set(atRiskLearners.map(learner => learner.email));
+  // We'll categorize learners into 4 distinct categories based on their current status
   const statusCounts = {
-    inProgress: 0,
     completed: 0,
-    notStarted: 0,
-    atRisk: uniqueAtRiskEmails.size
+    inProgress: 0,
+    atRisk: 0,
+    notStarted: 0
   };
 
-  // Count unique learners by Week Status column
+  // Count unique learners by their primary status
   Array.from(uniqueLearnersMap.values()).forEach(learner => {
-    const isAtRisk = uniqueAtRiskEmails.has(learner.email);
-    
-    if (isAtRisk) {
-      // At-risk learners are counted separately
-      return;
-    }
-    
     const status = learner.weekStatus.toLowerCase();
+    const isAtRisk = atRiskLearners.some(atRisk => atRisk.email === learner.email);
+    
     if (status.includes('completed')) {
       statusCounts.completed++;
     } else if (status.includes('not started')) {
       statusCounts.notStarted++;
     } else if (status.includes('progress')) {
-      statusCounts.inProgress++;
+      // For "In Progress" learners, check if they're at risk
+      if (isAtRisk) {
+        statusCounts.atRisk++;
+      } else {
+        statusCounts.inProgress++;
+      }
     } else {
-      // Default case for unclear statuses
-      statusCounts.inProgress++;
+      // Default case for unclear statuses - treat as in progress
+      if (isAtRisk) {
+        statusCounts.atRisk++;
+      } else {
+        statusCounts.inProgress++;
+      }
     }
   });
 
@@ -190,11 +187,79 @@ export const analyzeLearnerData = async (data: LearnerData[]): Promise<AnalysisR
     }
   ].filter(item => item.count > 0); // Only show categories with learners
 
+  // Calculate weekly progress statistics
+  const weekNumbers = Array.from(new Set(data.map(learner => learner.currentWeek))).sort((a, b) => a - b);
+  const weeklyProgressStats = weekNumbers.map(weekNum => {
+    const weekLearners = data.filter(learner => learner.currentWeek === weekNum);
+    const weekName = weekLearners[0]?.currentWeekName || `Week ${weekNum}`;
+    
+    return {
+      weekNumber: weekNum,
+      weekName,
+      learnersCount: weekLearners.length,
+      completedCount: weekLearners.filter(l => l.weekStatus.toLowerCase().includes('completed')).length,
+      inProgressCount: weekLearners.filter(l => l.weekStatus.toLowerCase().includes('progress')).length,
+      notStartedCount: weekLearners.filter(l => l.weekStatus.toLowerCase().includes('not started')).length
+    };
+  });
+
+  // Calculate Next Action statistics
+  const nextActionMap = new Map<string, number>();
+  data.forEach(learner => {
+    const action = learner.nextAction.trim();
+    if (action) {
+      nextActionMap.set(action, (nextActionMap.get(action) || 0) + 1);
+    }
+  });
+
+  const nextActionStats = Array.from(nextActionMap.entries())
+    .map(([action, count]) => ({
+      action,
+      count,
+      percentage: Math.round((count / data.length) * 100)
+    }))
+    .sort((a, b) => b.count - a.count);
+
+  // Calculate course week statistics
+  const courseWeekStats = courseStats.map(course => {
+    const courseLearners = data.filter(learner => learner.courseName === course.courseName);
+    const courseWeeks = Array.from(new Set(courseLearners.map(l => l.currentWeek))).sort((a, b) => a - b);
+    
+    // Determine total weeks (11 for most courses, 10 for Developer Fundamentals)
+    const totalWeeks = course.courseName.toLowerCase().includes('developer fundamentals') ? 10 : 11;
+    const currentWeek = Math.max(...courseWeeks);
+    
+    const weeklyBreakdown = courseWeeks.map(weekNum => {
+      const weekLearners = courseLearners.filter(learner => learner.currentWeek === weekNum);
+      const weekName = weekLearners[0]?.currentWeekName || `Week ${weekNum}`;
+      
+      return {
+        weekNumber: weekNum,
+        weekName,
+        learnersCount: weekLearners.length,
+        completedCount: weekLearners.filter(l => l.weekStatus.toLowerCase().includes('completed')).length,
+        inProgressCount: weekLearners.filter(l => l.weekStatus.toLowerCase().includes('progress')).length,
+        notStartedCount: weekLearners.filter(l => l.weekStatus.toLowerCase().includes('not started')).length
+      };
+    });
+
+    return {
+      courseName: course.courseName,
+      currentWeek,
+      totalWeeks,
+      weeklyBreakdown
+    };
+  });
+
   return {
     totalLearners: uniqueLearnerCount,
     atRiskLearners,
     courseStats,
     progressDistribution,
-    riskDistribution
+    riskDistribution,
+    weeklyProgressStats,
+    nextActionStats,
+    courseWeekStats,
+    offTrackLearners
   };
 };

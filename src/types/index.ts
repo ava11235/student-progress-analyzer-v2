@@ -25,6 +25,28 @@ export interface CourseStats {
   atRisk: number;
 }
 
+export interface WeeklyProgress {
+  weekNumber: number;
+  weekName: string;
+  learnersCount: number;
+  completedCount: number;
+  inProgressCount: number;
+  notStartedCount: number;
+}
+
+export interface NextActionStats {
+  action: string;
+  count: number;
+  percentage: number;
+}
+
+export interface CourseWeekStats {
+  courseName: string;
+  currentWeek: number;
+  totalWeeks: number;
+  weeklyBreakdown: WeeklyProgress[];
+}
+
 export interface AnalysisResult {
   totalLearners: number;
   atRiskLearners: AtRiskLearner[];
@@ -38,4 +60,8 @@ export interface AnalysisResult {
     count: number;
     percentage: number;
   }[];
+  weeklyProgressStats: WeeklyProgress[];
+  nextActionStats: NextActionStats[];
+  courseWeekStats: CourseWeekStats[];
+  offTrackLearners: LearnerData[];
 }

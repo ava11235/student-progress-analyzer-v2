@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import { LearnerData } from '../types';
 
 interface FileUploadProps {
-  onFileUpload: (data: LearnerData[]) => void;
+  onFileUpload: (data: LearnerData[], currentWeek: number, selectedCourse?: string) => void;
   isProcessing: boolean;
   hasData: boolean;
 }
@@ -16,6 +16,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
 }) => {
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentWeek, setCurrentWeek] = useState<number>(1);
+  const [availableCourses, setAvailableCourses] = useState<string[]>([]);
+  const [selectedCourse, setSelectedCourse] = useState<string>('');
+  const [uploadedData, setUploadedData] = useState<LearnerData[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const parseCSV = (file: File): Promise<LearnerData[]> => {
@@ -105,7 +109,13 @@ const FileUpload: React.FC<FileUploadProps> = ({
         throw new Error('No valid data found in the file.');
       }
       
-      onFileUpload(data);
+      // Extract unique course names and set up course selector
+      const uniqueCourses = Array.from(new Set(data.map(item => item.courseName).filter(Boolean)));
+      setAvailableCourses(uniqueCourses);
+      setUploadedData(data);
+      setSelectedCourse(''); // Reset course selection
+      
+      // Don't proceed to analysis yet - wait for user to select course and week
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error processing file');
     }
@@ -128,6 +138,22 @@ const FileUpload: React.FC<FileUploadProps> = ({
     }
   };
 
+  const handleCourseChange = (course: string) => {
+    setSelectedCourse(course);
+  };
+
+  const handleWeekChange = (week: number) => {
+    setCurrentWeek(week);
+  };
+
+  const handleProceedToAnalysis = () => {
+    if (uploadedData.length > 0 && selectedCourse && currentWeek >= 1) {
+      onFileUpload(uploadedData, currentWeek, selectedCourse);
+    }
+  };
+
+  const canProceed = uploadedData.length > 0 && selectedCourse && currentWeek >= 1;
+
   return (
     <div className="card">
       <h2>Learner Analytics Dashboard</h2>
@@ -139,7 +165,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
           Simply upload your learner data file and get instant insights including:
         </p>
         <ul style={{ marginBottom: '15px', paddingLeft: '20px' }}>
-          <li>At-risk learner identification (3+ weeks inactive)</li>
+          <li>At-risk learner identification</li>
           <li>Course completion status breakdown</li>
           <li>Progress distribution analysis</li>
           <li>Downloadable Excel reports with outreach scripts</li>
@@ -157,9 +183,103 @@ const FileUpload: React.FC<FileUploadProps> = ({
         </div>
       )}
       
-      {hasData && (
+      {uploadedData.length > 0 && !selectedCourse && (
         <div className="alert alert-success">
-          Data uploaded successfully! Switch to the Dashboard tab to view analysis.
+          Data uploaded successfully! Please select a course below to proceed.
+        </div>
+      )}
+
+      {hasData && canProceed && (
+        <div className="alert alert-success">
+          Ready to analyze! Click "Proceed to Analysis" or switch to Dashboard tab.
+        </div>
+      )}
+      
+
+
+      {/* Show configuration panel when courses are available */}
+      {availableCourses.length > 0 && (
+        <div style={{ marginBottom: '20px', padding: '25px', backgroundColor: '#e3f2fd', borderRadius: '10px', border: '2px solid #007bff' }}>
+          <h3 style={{ marginTop: '0', color: '#007bff', marginBottom: '15px' }}>⚙️ Configure Analysis Parameters</h3>
+          <p style={{ marginBottom: '25px', color: '#495057' }}>
+            Your file contains {availableCourses.length} course(s). Please select the course and current program week for analysis.
+          </p>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '25px', alignItems: 'start', marginBottom: '25px' }}>
+            {/* Current Week Selector */}
+            <div>
+              <label htmlFor="currentWeek" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#495057' }}>
+                Current Program Week *
+              </label>
+              <input
+                id="currentWeek"
+                type="number"
+                min="1"
+                max="11"
+                value={currentWeek}
+                onChange={(e) => handleWeekChange(parseInt(e.target.value) || 1)}
+                style={{
+                  width: '120px',
+                  padding: '12px 15px',
+                  border: currentWeek >= 1 ? '2px solid #28a745' : '2px solid #dc3545',
+                  borderRadius: '6px',
+                  fontSize: '16px'
+                }}
+              />
+              <p style={{ marginTop: '8px', fontSize: '14px', color: '#6c757d', marginBottom: '0' }}>
+                Learners 3+ weeks behind this week are classified as at-risk
+              </p>
+            </div>
+
+            {/* Course Selector */}
+            <div>
+              <label htmlFor="courseSelector" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#495057' }}>
+                Select Course *
+              </label>
+              <select
+                id="courseSelector"
+                value={selectedCourse}
+                onChange={(e) => handleCourseChange(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px 15px',
+                  border: selectedCourse ? '2px solid #28a745' : '2px solid #dc3545',
+                  borderRadius: '6px',
+                  fontSize: '16px',
+                  backgroundColor: 'white'
+                }}
+              >
+                <option value="">-- Select a Course --</option>
+                {availableCourses.map(course => (
+                  <option key={course} value={course}>{course}</option>
+                ))}
+              </select>
+              <p style={{ marginTop: '8px', fontSize: '14px', color: '#6c757d', marginBottom: '0' }}>
+                Available: {availableCourses.join(', ')}
+              </p>
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'center' }}>
+            <button
+              onClick={handleProceedToAnalysis}
+              disabled={!canProceed}
+              style={{
+                padding: '15px 40px',
+                fontSize: '18px',
+                fontWeight: 'bold',
+                color: canProceed ? 'white' : '#6c757d',
+                backgroundColor: canProceed ? '#007bff' : '#e9ecef',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: canProceed ? 'pointer' : 'not-allowed',
+                transition: 'all 0.3s',
+                boxShadow: canProceed ? '0 4px 8px rgba(0,123,255,0.3)' : 'none'
+              }}
+            >
+              {canProceed ? '🚀 Proceed to Analysis' : '⚠️ Please select a course'}
+            </button>
+          </div>
         </div>
       )}
       
