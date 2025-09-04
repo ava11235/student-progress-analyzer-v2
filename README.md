@@ -25,7 +25,7 @@ A privacy-first web application for analyzing learner progress data and identify
 
 ## Architecture
 
-<img width="1437" height="1027" alt="image" src="https://github.com/user-attachments/assets/bbfbc621-b621-4ac2-9ef1-3624485040c3" />
+<img width="1437" height="1018" alt="image" src="https://github.com/user-attachments/assets/77956da2-09c8-474b-8997-230d192cc723" />
 
 
 ### Client-Side Processing
@@ -165,4 +165,5 @@ The `infrastructure/` directory contains AWS CDK code for:
 2. **Upload**: Drop CSV/Excel file in upload area
 3. **Analyze**: View automated analysis in dashboard
 4. **Report**: Generate Excel reports and Slack scripts
+
 
