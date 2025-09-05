@@ -30,18 +30,26 @@ const FileUpload: React.FC<FileUploadProps> = ({
         header: true,
         complete: (results) => {
           try {
-            const data = results.data.map((row: any) => ({
-              email: row['Email'] || row['email'] || '',
-              courseName: row['Course Name'] || row['courseName'] || '',
-              currentWeek: parseInt(row['Current Week'] || row['currentWeek'] || '0'),
-              currentWeekName: row['Current Week Name'] || row['currentWeekName'] || '',
-              weekStatus: row['Week Status'] || row['weekStatus'] || '',
-              currentWeekProgress: row['Current Week Progress'] || row['currentWeekProgress'] || '',
-              weekPercentage: parseFloat((row['Week Percentage'] || row['weekPercentage'] || '0').replace('%', '')),
-              lastActivity: row['Last Activity'] || row['lastActivity'] || '',
-              lastCompletedModule: row['Last Completed Module'] || row['lastCompletedModule'] || '',
-              nextAction: row['Next Action'] || row['nextAction'] || ''
-            })).filter(item => item.email); // Filter out empty rows
+
+            
+            const data = results.data.map((row: any) => {
+              // More robust parsing for Current Week
+              const weekValue = row['Current Week'] || row['currentWeek'] || '0';
+              const parsedWeek = parseInt(String(weekValue).replace(/\D/g, '')) || 0; // Remove non-digits and parse
+              
+              return {
+                email: row['Email'] || row['email'] || '',
+                courseName: row['Course Name'] || row['courseName'] || '',
+                currentWeek: parsedWeek,
+                currentWeekName: row['Current Week Name'] || row['currentWeekName'] || '',
+                weekStatus: row['Week Status'] || row['weekStatus'] || '',
+                currentWeekProgress: row['Current Week Progress'] || row['currentWeekProgress'] || '',
+                weekPercentage: parseFloat((row['Week Percentage'] || row['weekPercentage'] || '0').toString().replace('%', '')) || 0,
+                lastActivity: row['Last Activity'] || row['lastActivity'] || '',
+                lastCompletedModule: row['Last Completed Module'] || row['lastCompletedModule'] || '',
+                nextAction: row['Next Action'] || row['nextAction'] || ''
+              };
+            }).filter(item => item.email); // Filter out empty rows
             
             resolve(data);
           } catch (err) {
@@ -93,6 +101,8 @@ const FileUpload: React.FC<FileUploadProps> = ({
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
           const jsonData = XLSX.utils.sheet_to_json(worksheet);
+          
+
           
           const parsedData = jsonData.map((row: any) => ({
             email: row['Email'] || row['email'] || '',
@@ -299,7 +309,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
                 }}
               />
               <p style={{ marginTop: '8px', fontSize: '14px', color: '#6c757d', marginBottom: '0' }}>
-                Identifies learners 1-3 weeks behind for actionable intervention
+                {currentWeek <= 3 
+                  ? `Week ${currentWeek}: Grace period - actionable tracking starts Week 4`
+                  : 'Identifies learners 1-3 weeks behind for actionable intervention'
+                }
               </p>
             </div>
 

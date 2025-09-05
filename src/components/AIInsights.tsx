@@ -102,16 +102,32 @@ const AIInsights: React.FC<AIInsightsProps> = ({
       const totalLearners = analysisResult.totalLearners;
       const atRiskRate = totalLearners > 0 ? Math.round((atRiskCount / totalLearners) * 100) : 0;
       
+      const scopeLabel = getScopeLabel();
+      const courseContext = currentCourse && analysisResult.courseStats.length === 1 
+        ? `\n• Analyzing: ${currentCourse} only`
+        : `\n• Analyzing: ${analysisResult.courseStats.map(c => c.courseName).join(', ')}`;
+
+      // Handle grace period
+      if (analysisResult.isGracePeriod) {
+        return {
+          response: `${scopeLabel}\n\n📅 **Grace Period - Week ${analysisResult.currentWeek}**${courseContext}\n\n⚠️ **At-Risk Tracking Status:**\n• Current at-risk learners: 0 (grace period)\n• Tracking begins in Week 4\n• Weeks 1-3 are considered normal adjustment time\n\n**Recommendation:** Come back in Week 4 or later to identify learners who need intervention. Early weeks focus on onboarding and initial engagement.`,
+          chart: (
+            <div style={{ height: '200px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff3cd', borderRadius: '8px' }}>
+              <div style={{ textAlign: 'center', color: '#856404' }}>
+                <div style={{ fontSize: '48px', marginBottom: '10px' }}>📅</div>
+                <div style={{ fontSize: '18px', fontWeight: 'bold' }}>Grace Period</div>
+                <div style={{ fontSize: '14px' }}>At-risk tracking starts Week 4</div>
+              </div>
+            </div>
+          )
+        };
+      }
+      
       const riskBreakdown = {
         high: analysisResult.atRiskLearners.filter(l => l.riskLevel === 'High').length,
         medium: analysisResult.atRiskLearners.filter(l => l.riskLevel === 'Medium').length,
         low: analysisResult.atRiskLearners.filter(l => l.riskLevel === 'Low').length
       };
-
-      const scopeLabel = getScopeLabel();
-      const courseContext = currentCourse && analysisResult.courseStats.length === 1 
-        ? `\n• Analyzing: ${currentCourse} only`
-        : `\n• Analyzing: ${analysisResult.courseStats.map(c => c.courseName).join(', ')}`;
 
       return {
         response: `${scopeLabel}\n\n⚠️ **At-Risk Learner Analysis**${courseContext}\n• Total at-risk learners: ${atRiskCount} (${atRiskRate}%)\n• High risk (3 weeks behind): ${riskBreakdown.high}\n• Medium risk (2 weeks behind): ${riskBreakdown.medium}\n• Low risk (1 week behind): ${riskBreakdown.low}\n\n${atRiskRate > 20 ? 'This indicates significant intervention needs.' : atRiskRate > 10 ? 'Moderate intervention required.' : 'Low intervention needs - good performance!'}`,

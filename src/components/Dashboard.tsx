@@ -136,6 +136,25 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
+      {/* Grace Period Message */}
+      {analysisResult.isGracePeriod && (
+        <div style={{ 
+          backgroundColor: '#fff3cd', 
+          border: '1px solid #ffeaa7', 
+          borderRadius: '8px', 
+          padding: '20px', 
+          marginBottom: '20px',
+          textAlign: 'center'
+        }}>
+          <h3 style={{ margin: '0 0 10px 0', color: '#856404' }}>📅 Grace Period - Week {analysisResult.currentWeek}</h3>
+          <p style={{ margin: '0', color: '#856404', fontSize: '16px' }}>
+            <strong>Actionable learner tracking begins in Week 4.</strong><br/>
+            Weeks 1-3 are considered a grace period for learners to get started. 
+            Come back when you're in Week 4 or later to see learners who need intervention.
+          </p>
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '30px' }}>
         <div className="card" style={{ textAlign: 'center', padding: '15px' }}>
@@ -145,7 +164,13 @@ const Dashboard: React.FC<DashboardProps> = ({
         <div className="card" style={{ textAlign: 'center', padding: '15px' }}>
           <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>Actionable Learners</h3>
           <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#fd7e14' }}>{atRiskLearners.length}</div>
-          <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>1-3 weeks behind</div>
+          {analysisResult.isGracePeriod ? (
+            <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '5px', fontStyle: 'italic' }}>
+              Grace period (Week {analysisResult.currentWeek})
+            </div>
+          ) : (
+            <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>1-3 weeks behind</div>
+          )}
         </div>
         <div className="card" style={{ textAlign: 'center', padding: '15px' }}>
           <h3 style={{ margin: '0 0 10px 0', color: '#333' }}>Courses</h3>

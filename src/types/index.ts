@@ -71,4 +71,6 @@ export interface AnalysisResult {
   nextActionStats: NextActionStats[];
   courseWeekStats: CourseWeekStats[];
   offTrackLearners: LearnerData[];
+  isGracePeriod: boolean;
+  currentWeek: number;
 }

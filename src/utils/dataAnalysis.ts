@@ -26,19 +26,20 @@ export const analyzeLearnerData = async (data: LearnerData[], currentWeek: numbe
   });
 
   // Calculate at-risk learners: Focus on "saveable" learners 1-3 weeks behind current week
-  const atRiskLearners: AtRiskLearner[] = data
+  // Grace period: If current week is 1-3, no actionable learners (too early for intervention)
+  const atRiskLearners: AtRiskLearner[] = currentAnalysisWeek <= 3 ? [] : data
     .filter(learner => {
       // Target learners who are 1-3 weeks behind (can still be helped)
       const weeksBehind = currentAnalysisWeek - learner.currentWeek;
       return weeksBehind >= 1 && weeksBehind <= 3;
     })
     .map(learner => {
-      const weeksBehind = Math.max(0, currentAnalysisWeek - learner.currentWeek);
+      const weeksBehind = currentAnalysisWeek - learner.currentWeek;
       
       // Determine risk level for actionable intervention
       let riskLevel: 'High' | 'Medium' | 'Low' = 'Low';
       
-      if (weeksBehind === 3) {
+      if (weeksBehind >= 3) {
         riskLevel = 'High';      // 3 weeks behind - urgent intervention needed
       } else if (weeksBehind === 2) {
         riskLevel = 'Medium';    // 2 weeks behind - moderate intervention
@@ -53,6 +54,12 @@ export const analyzeLearnerData = async (data: LearnerData[], currentWeek: numbe
       };
     })
     .sort((a, b) => b.weeksBeind - a.weeksBeind);
+
+  // Debug log to help troubleshoot
+  console.log(`At-risk calculation: currentWeek=${currentAnalysisWeek}, found ${atRiskLearners.length} at-risk learners`);
+  if (data.length > 0) {
+    console.log(`Sample data: learner weeks range from ${Math.min(...data.map(l => l.currentWeek))} to ${Math.max(...data.map(l => l.currentWeek))}`);
+  }
 
   // Calculate course statistics with unique learners per course
   const courseMap = new Map<string, CourseStats>();
@@ -262,6 +269,8 @@ export const analyzeLearnerData = async (data: LearnerData[], currentWeek: numbe
     weeklyProgressStats,
     nextActionStats,
     courseWeekStats,
-    offTrackLearners
+    offTrackLearners,
+    isGracePeriod: currentAnalysisWeek <= 3,
+    currentWeek: currentAnalysisWeek
   };
 };
