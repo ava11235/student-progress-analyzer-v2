@@ -26,7 +26,8 @@ A privacy-first web application for analyzing learner progress data and identify
 
 ## Architecture
 
-<img width="1437" height="1018" alt="image" src="https://github.com/user-attachments/assets/77956da2-09c8-474b-8997-230d192cc723" />
+<img width="1803" height="1045" alt="image" src="https://github.com/user-attachments/assets/391dc0ef-36d4-451f-a490-8ec4c8d5acd4" />
+
 
 
 ### Client-Side Processing
@@ -38,6 +39,7 @@ A privacy-first web application for analyzing learner progress data and identify
 - **Cognito User Pool**: Secure authentication and user management
 - **Amplify Hosting**: Static site hosting with global CDN via CloudFront
 - **CDK**: Infrastructure as Code for reproducible deployments
+
 
 
 
